@@ -12,26 +12,46 @@ DATA_TYPE_VALIDATOR = {
 }
 
 
-class Evaluator():
+class JSONEvaluator():
+    """
+    This class evaluates if a given json match a pattern
+    usage
+    ev = JSONEvaluator([schema])
+    ev.set_schema(schema)  -> dict or json string if wasn't provided at
+         instance creation
+    ev.evaluate(json_for_test)
+    ev.ok -> if given json pass validation
+    ev.errors - > list of found errors
+    """
 
-    def __init__(self, schema, json_to_validate, autoevaluate=True):
-        self.schema = schema
-        self.tested = json_to_validate
-        if type(schema) is str:
-            self.schema = json.loads(schema)
-        assert type(self.schema) is dict, "schema must be a dict or valid json"
-        if type(json_to_validate) == str:
-            self.tested = json.loads(json_to_validate)
-        assert type(self.tested) is dict, \
-            "json_to_validate must be a dict or valid json"
+    def __init__(self, schema=None):
         self.found_errors = []
-        if autoevaluate:
-            self.evaluate()
+        self._schema = None
+        if schema:
+            self.set_schema(schema)
 
-    def evaluate(self):
-        self._evaluate(self.schema, self.tested)
+    def set_schema(self, schema):
+        if type(schema) is str:
+            try:
+                self._schema = json.loads(schema)
+            except Exception:
+                raise ValueError("Not valid string. Must be a Json")
+        assert type(schema) is dict, "schema must be a dict or valid json"
+        self._schema = schema
 
-    def add_type_validator(self, name, handler):
+    def evaluate(self, json_to_validate):
+        assert self._schema is not None, "You have to set a schema first."
+        if type(json_to_validate) == str:
+            try:
+                self.tested = json.loads(json_to_validate)
+            except ValueError:
+                raise ValueError("Not valid string. Must be a Json")
+        assert type(json_to_validate) is dict, \
+            "json_to_validate must be a dict or valid json"
+
+        self._evaluate(self._schema, json_to_validate)
+
+    def add_custom_type_validator(self, name, handler):
         assert type(name) is str, "Name is not a string"
         assert type(handler) is str or callable(handler), \
             "handler must be a regex string or a callable"
@@ -49,6 +69,7 @@ class Evaluator():
             valid = validator(data)
         else:
             pattern = re.compile(validator)
+            data = str(data) if type(data) is not str else data
             search = pattern.search(data)
             valid = search is not None
         return valid
@@ -63,132 +84,74 @@ class Evaluator():
                 "datatype": pattern_valuetype}
 
     def _evaluate(self, schema, tested):
-        try:
-            for branch in schema.items():
+        for branch in schema.items():
+            try:
                 unpacked = self._unpack(branch)
                 key = unpacked["key"]
                 required = unpacked["required"]
                 datatype = unpacked["datatype"]
+                data = tested.get(key)
+                pressent = (data is not None) or \
+                    type(data) in (str, list, dict)
                 if required:
-                    data = tested.get(key)
-                    assert data, f"{key} not found"
-                    if datatype is dict:
-                        subbranch = branch[1]
-                        try:
-                            self._evaluate(subbranch, data)
-                        except AssertionError as e:
-                            self.found_errors.append(e.args[0])
-                    else:
-                        assert self._valid_data(datatype, data), \
-                            f"{key} is not well formatted"
-        except AssertionError as e:
-            self.found_errors.append(e.args[0])
+                    assert pressent, f"{key} not found"
+                if datatype is dict:
+                    subbranch = branch[1]
+                    try:
+                        self._evaluate(subbranch, data)
+                    except AssertionError as e:
+                        self.found_errors.append(e.args[0])
+                else:
+                    assert self._valid_data(datatype, data), \
+                        f"{key} is not well formatted"
+            except AssertionError as e:
+                self.found_errors.append(e.args[0])
 
     @property
     def errors(self):
         return self.found_errors
 
+    @property
+    def ok(self):
+        return (self._schema is not None) and (len(self.errors) == 0)
+
+    @property
+    def validators(self):
+        return DATA_TYPE_VALIDATOR
+
 
 if __name__ == "__main__":
-    RPO_STRUCTURE = {
+    SCHEMA_STRUCTURE = {
         "!version": "string",
-        "!Cdtr": {
-            "!CtctDtls": {
-                "!EmailAdr": "email"
+        "!email": "email",
+        "!data": {
+            "!Id": "number",
+            "title": "string"  # optional
             },
-            "!Id": {
-                "!PrvtId": {
-                    "!Othr": {
-                        "!Id": "cuit"
-                    }
-                }
-            },
-            "!Nm": "number",
-            "!PstlAdr": {
-                "!BldgNb": "string",
-                "!Ctry": "ISO3166",
-                "PstCd": "string",
-                "!StrtNm": "string",
-                "!TwnNm": "string"
-            }
-        },
-        "!CdtrAcct": {
-            "!Id": {
-                "!Othr": {
-                    "!Id": "cbu"
-                }
-            }
-        },
-        "!Dbtr": {
-            "!CtctDtls": {
-                "!EmailAdr": "email"
-            },
-            "!Id": {
-                "!PrvtId": {
-                    "!Othr": {
-                        "!Id": "cuit"  # TODO: ¿es internacional esto?
-                    }
-                }
-            },
-            "!Nm": "number",
-            "!PstlAdr": {
-                "!Ctry": "string",
-                "PstCd": "string",
-                "!StrtNm": "string",
-                "!TwnNm": "string"
-            }
+        }
+
+    ok_json = {
+        "version": "1.0.1a",
+        "email": "test@test.com",
+        "data": {
+            "Id": 231,
+            "title": "description"
+        }
+    }
+    bad_json = {
+        "version": "1.0.1a",
+        # "email": "test@test.com",
+        "data": {
+            "Id": "badtype",
+            "title": "description"
         }
     }
 
-    tested_dict = {
-        #"version": "32",
-        "Cdtr": {
-            "CtctDtls": {
-                "EmailAdr": "dn@dm.com"
-            },
-            "Id": {
-                "PrvtId": {
-                    "Othr": {
-                        "Id": "333"
-                    }
-                }
-            },
-            "Nm": "3322",
-            "PstlAdr": {
-                "BldgNb": "aaaaaaa",
-                "Ctry": "US",
-                "PstCd": "cccccccc",
-                "StrtNm": "ddddd",
-                "TwnNm": "fffff"
-            }
-        },
-        "CdtrAcct": {
-            "Id": {
-                "Othr": {
-                    "Id": "3333"
-                }
-            }
-        },
-        "Dbtr": {
-            "CtctDtls": {
-                "EmailAdr": "ddd@gmail.com"
-            },
-            "Id": {
-                "PrvtId": {
-                    "Othr": {
-                        "Id": "0099"
-                    }
-                }
-            },
-            "Nm": "3344",
-            "PstlAdr": {
-                "Ctry": "AR",
-                "PstCd": "",
-                "StrtNm": "hhhhh",
-                "TwnNm": "mmm"
-            }
-        }
-        }
-
-    e = Evaluator(RPO_STRUCTURE, tested_dict)
+    e = JSONEvaluator()
+    e.set_schema(SCHEMA_STRUCTURE)
+    e.evaluate(ok_json)
     print(e.errors)
+    print(e.ok)
+    e.evaluate(bad_json)
+    print(e.errors)
+    print(e.ok)
