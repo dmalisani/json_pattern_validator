@@ -13,15 +13,17 @@ DATA_TYPE_VALIDATOR = {
 
 
 class JSONEvaluator():
+
     """
     This class evaluates if a given json match a pattern
-    usage
-    ev = JSONEvaluator([schema])
-    ev.set_schema(schema)  -> dict or json string if wasn't provided at
-         instance creation
-    ev.evaluate(json_for_test)
-    ev.ok -> if given json pass validation
-    ev.errors - > list of found errors
+
+    Methods:
+        set_schema(schema)  -> dict or json string if wasn't provided at instance creation
+        evaluate(json_for_test)
+
+    Properties:
+    ok -> if given json pass validation
+    errors - > list of found errors
     """
 
     def __init__(self, schema=None):
@@ -31,6 +33,7 @@ class JSONEvaluator():
             self.set_schema(schema)
 
     def set_schema(self, schema):
+        """Loads a schema for validate json string or dicts"""
         if type(schema) is str:
             try:
                 self._schema = json.loads(schema)
@@ -40,6 +43,7 @@ class JSONEvaluator():
         self._schema = schema
 
     def evaluate(self, json_to_validate):
+        """Test if given json/dict match loaded schema"""
         assert self._schema is not None, "You have to set a schema first."
         if type(json_to_validate) == str:
             try:
@@ -52,6 +56,7 @@ class JSONEvaluator():
         self._evaluate(self._schema, json_to_validate)
 
     def add_custom_type_validator(self, name, handler):
+        """Add or overwrite validators (regex or callable)"""
         assert type(name) is str, "Name is not a string"
         assert type(handler) is str or callable(handler), \
             "handler must be a regex string or a callable"
@@ -109,14 +114,17 @@ class JSONEvaluator():
 
     @property
     def errors(self):
+        """List of mandatory field that not mached"""
         return self.found_errors
 
     @property
     def ok(self):
+        """Returns True if no errors in validation"""
         return (self._schema is not None) and (len(self.errors) == 0)
 
     @property
     def validators(self):
+        """Return dict of current validators"""
         return DATA_TYPE_VALIDATOR
 
 
