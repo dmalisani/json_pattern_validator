@@ -47,7 +47,7 @@ def cuit_validator(cuit, *args, **kwargs):
     return aux == int(cuit[10])
 
 
-def great_than_validator(value,  *args, **kwargs):
+def greater_than_validator(value,  *args, **kwargs):
     assert "datatype" in kwargs, "datatype argument is missing"
     datatype = kwargs["datatype"]
     assert type(datatype) is str and len(datatype) > 13,\
