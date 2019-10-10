@@ -3,7 +3,7 @@ import json
 from validators import (
     cbu_validator,
     cuit_validator,
-    great_than_validator,
+    greater_than_validator,
 )
 
 DATA_TYPE_VALIDATOR = {
@@ -15,7 +15,7 @@ DATA_TYPE_VALIDATOR = {
     "cbu": r"(.)+",
     "date": r"(.)+",
     "number": r"[-+]?[0-9]+(\.[0-9]+)?$",
-    "greater_than_10": great_than_validator
+    "greater_than_10": greater_than_validator
 }
 
 
