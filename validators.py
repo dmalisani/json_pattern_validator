@@ -1,3 +1,5 @@
+from datetime import datetime
+
 
 def cbu_validator(cbu, *args, **kwargs):
     """
@@ -71,3 +73,18 @@ def greater_than_validator(value,  *args, **kwargs):
         except ValueError:
             return False
     return value > min_value
+
+def date_validator(date, *args, **kwargs):
+    """
+    Check if is a valid date (ISO8601). It Returns Boolean.
+    """
+    if type(date) is not str:
+        return False
+    if len(date) != 10:
+        return False
+
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+        return True
+    except Exception:
+        return False

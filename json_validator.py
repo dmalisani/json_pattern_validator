@@ -3,6 +3,7 @@ import json
 from validators import (
     cbu_validator,
     cuit_validator,
+    date_validator,
     greater_than_validator,
 )
 
@@ -12,8 +13,9 @@ DATA_TYPE_VALIDATOR = {
     "email": r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)",
     "cuit": r"(.)+",
     "ISO3166": r"^([A-Z]{0,2})$",
-    "cbu": r"(.)+",
-    "date": r"(.)+",
+    "cbu": cbu_validator,
+    "date": date_validator,
+    "cuit": cuit_validator,
     "number": r"[-+]?[0-9]+(\.[0-9]+)?$",
     "greater_than_10": greater_than_validator
 }
@@ -33,11 +35,12 @@ class JSONEvaluator():
     errors - > list of found errors
     """
 
-    def __init__(self, schema=None):
+    def __init__(self, schema=None, debug=False):
         self.found_errors = []
         self._schema = None
         if schema:
             self.set_schema(schema)
+        self.debug = debug
 
     def set_schema(self, schema):
         """Loads a schema for validate json string or dicts"""
@@ -49,9 +52,11 @@ class JSONEvaluator():
         assert type(schema) is dict, "schema must be a dict or valid json"
         self._schema = schema
 
-    def evaluate(self, json_to_validate, *, debug=False):
+    def evaluate(self, json_to_validate, *, enable_debug=False):
         """Test if given json/dict match loaded schema"""
         assert self._schema is not None, "You have to set a schema first."
+        before_debug = self.debug
+        self.debug = self.debug or enable_debug
         if type(json_to_validate) == str:
             try:
                 self.tested = json.loads(json_to_validate)
@@ -60,7 +65,9 @@ class JSONEvaluator():
         assert type(json_to_validate) is dict, \
             "json_to_validate must be a dict or valid json"
 
-        self._evaluate(self._schema, json_to_validate, debug=debug)
+        self._evaluate(self._schema, json_to_validate)
+        self.debug = before_debug
+        
 
     def add_custom_type_validator(self, name, handler):
         """Add or overwrite validators (regex or callable)"""
@@ -96,7 +103,11 @@ class JSONEvaluator():
                 "required": required,
                 "datatype": pattern_valuetype}
 
-    def _evaluate(self, schema, tested, path=None, level=0, *, debug=False):
+    def _debug_print(self, *args):
+        if self.debug:
+            print(args)
+
+    def _evaluate(self, schema, tested, path=None, level=0):
         for branch in schema.items():
             try:
                 unpacked = self._unpack(branch)
@@ -109,8 +120,7 @@ class JSONEvaluator():
                 path_str = path + "." if path else ""
                 path_str = path_str[1:] if path_str and path_str[0] == "." else path_str
                 path_str = path_str[:-1] if path_str and path_str[-1] == "." else path_str
-                if debug:
-                    print("Evaluating: {}".format(path_str))
+                self._debug_print("Evaluating: {}".format(path_str))
 
                 if required:
                     assert pressent, f"[{path_str}]: {key} not found"
@@ -122,19 +132,17 @@ class JSONEvaluator():
                         path = key
                     try:
                         level += 1
-                        self._evaluate(subbranch, data, path, level, debug=debug)
+                        self._evaluate(subbranch, data, path, level)
                         level -= 1
                         path = ".".join(path.split(".")[:-1])
                     except AssertionError as e:
-                        if debug:
-                            print("ERROR: {}".format(e.args[0]))
+                        self._debug_print("ERROR: {}".format(e.args[0]))
                         self.found_errors.append(e.args[0])
                 else:
                     try:
                         valid = self._valid_data(datatype, data)
                     except AssertionError:
-                        if debug:
-                            print("ERROR: [{0}]: {1} pattern {2} or "
+                        self._debug_print("ERROR: [{0}]: {1} pattern {2} or "
                                   "was not found in schema".format(path_str, key, datatype))
                         raise AssertionError(
                             f"[{path_str}]: {key} pattern {datatype} or "
@@ -142,8 +150,7 @@ class JSONEvaluator():
                     assert valid, \
                         f"[{path_str}]: {key} is not well formatted"
             except AssertionError as e:
-                if debug:
-                    print("ERROR: {}".format(e.args[0]))                
+                self._debug_print("ERROR: {}".format(e.args[0]))                
                 self.found_errors.append(e.args[0])
 
     @property
@@ -160,53 +167,4 @@ class JSONEvaluator():
     def validators(self):
         """Return dict of current validators"""
         return DATA_TYPE_VALIDATOR
-
-
-if __name__ == "__main__":
-    SCHEMA_STRUCTURE = {
-        "!version": "greater_than_10",
-        "!email": "email",
-        "!data": {
-            "!subrama": {
-                  "!numero": "number",
-                  "!otrasubrama": {
-                      "!id": "number"
-                  }
-                },
-
-            "!Id": "number",
-            "title": "string"  # optional
-            },
-        }
-
-    ok_json = {
-        "version": "2",
-        "email": "test@test.com",
-        "data": {
-            "subrama": {
-                  "numero": 18,
-                  "otrasubrama": {
-                      "id": 555
-                  }
-                },
-            "Id": 231,
-            "title": "description"
-        }
-    }
-    bad_json = {
-        "version": "1.0.1a",
-        # "email": "test@test.com",
-        "data": {
-            "Id": "badtype",
-            "title": "description"
-        }
-    }
-
-    e = JSONEvaluator()
-    e.set_schema(SCHEMA_STRUCTURE)
-    e.evaluate(ok_json)
-    print(e.errors)
-    print(e.ok)
-    # e.evaluate(bad_json)
-    # print(e.errors)
-    # print(e.ok)
+    
