@@ -1,6 +1,6 @@
 import re
 import json
-from validators import (
+from .validators import (
     cbu_validator,
     cuit_validator,
     date_validator,

@@ -1,6 +1,5 @@
 import pytest
-from json_validator import JSONEvaluator
-
+from json_pattern_validator import JSONEvaluator
 
 BASE_SCHEMA = {
     "!version": "number",
